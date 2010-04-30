@@ -1,0 +1,10 @@
+# Project output
+/bin
+/generated
+/runtimefw
+
+# Mac detritus
+.DS_Store
+
+# vi detritus
+*~

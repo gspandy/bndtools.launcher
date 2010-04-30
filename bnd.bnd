@@ -1,0 +1,4 @@
+Bundle-Version: 0.0.0.${tstamp;yyyyMMdd-HHmm}
+Private-Package: bndtools.launcher
+Main-Class: bndtools.launcher.Main
+-buildpath: osgi.core;version=4.2

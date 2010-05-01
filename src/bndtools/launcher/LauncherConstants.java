@@ -40,8 +40,6 @@ public final class LauncherConstants {
 	
 	public static final String DEFAULT_DYNAMIC_BUNDLES = TRUE.toString();
 	public static final String DEFAULT_SHUTDOWN_ON_BUNDLE_ERROR = FALSE.toString();
-
-
 	
 	private LauncherConstants() {} // Prevents instantiation
 }

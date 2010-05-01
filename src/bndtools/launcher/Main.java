@@ -31,8 +31,8 @@ import java.util.logging.StreamHandler;
 
 import org.osgi.framework.BundleEvent;
 import org.osgi.framework.BundleException;
-import org.osgi.framework.BundleListener;
 import org.osgi.framework.Constants;
+import org.osgi.framework.SynchronousBundleListener;
 import org.osgi.framework.launch.Framework;
 import org.osgi.framework.launch.FrameworkFactory;
 
@@ -273,7 +273,7 @@ public class Main implements Runnable {
 		// when the system bundle starts to shutdown
 		final AtomicBoolean shutdown = new AtomicBoolean(false);
 		final Thread mainThread = Thread.currentThread();
-		framework.getBundleContext().addBundleListener(new BundleListener() {
+		framework.getBundleContext().addBundleListener(new SynchronousBundleListener() {
 			public void bundleChanged(BundleEvent event) {
 				if(event.getBundle().getBundleId() == 0 && event.getType() == BundleEvent.STOPPING) {
 					shutdown.set(true);

@@ -4,7 +4,7 @@
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Neil Bartlett - initial API and implementation
  ******************************************************************************/
@@ -37,11 +37,11 @@ import org.osgi.framework.launch.Framework;
 import org.osgi.framework.launch.FrameworkFactory;
 
 public class Main implements Runnable {
-	
+
 	private static final String DEFAULT_PROPS_FILE = "launch.properties";
-	
+
 	private Logger logger;
-	
+
 	public static void main(String[] args) {
 		try {
 			Main main = new Main();
@@ -53,10 +53,10 @@ public class Main implements Runnable {
 			System.exit(0);
 		}
 	}
-	
+
 	File propsFile;
 	boolean enableDebug = false;
-	
+
 	public void init(String[] args) throws IllegalArgumentException {
 		String fileName = DEFAULT_PROPS_FILE;
 		if(args != null) {
@@ -73,7 +73,7 @@ public class Main implements Runnable {
 		}
 		propsFile = new File(fileName);
 	}
-	
+
 	public void run() {
 		// LOAD PROPERTIES
 		Properties props = new Properties();
@@ -89,29 +89,29 @@ public class Main implements Runnable {
 			e.printStackTrace();
 			return;
 		}
-		
+
 		// LOGGING
 		Handler logHandler = initialiseLogging(props);
-		
+
 		// STORAGE
 		File storageDir = initialiseStorage(props);
-		
+
 		try {
 			// LOAD RUNTIME PROPERTIES
 			Properties config = new Properties();
 			config.put(Constants.FRAMEWORK_STORAGE, storageDir.getAbsolutePath());
 			copyFrameworkConfig(props, config);
-	
+
 			// CREATE FRAMEWORK AND SYNC BUNDLES
 			Framework framework = createAndRunFramework(config);
 			if(framework == null) return;
-			
+
 			// CREATE INSTALLER
 			Thread installerThread = createInstaller(framework, props);
-			
+
 			// MAIN THREAD EXECUTOR
 			createAndRunMainThreadExecutor(framework, "main");
-			
+
 			// SHUTDOWN
 			try {
 				logger.info("Waiting for the framework to stop.");
@@ -135,13 +135,13 @@ public class Main implements Runnable {
 		String logLevelStr = props.getProperty(LauncherConstants.PROP_LOG_LEVEL, LauncherConstants.DEFAULT_LOG_LEVEL);
 		if(enableDebug)
 			System.err.println(MessageFormat.format("Setting main log level to {0}.", logLevelStr));
-		
+
 		Logger rootLogger = Logger.getLogger("");
 		Handler[] handlers = rootLogger.getHandlers();
 		for (Handler handler : handlers) {
 			rootLogger.removeHandler(handler);
 		}
-		
+
 		Handler handler = null;
 		String logOutput = props.getProperty(LauncherConstants.PROP_LOG_OUTPUT, LauncherConstants.DEFAULT_LOG_OUTPUT);
 		if(logOutput.startsWith("file:")) {
@@ -164,7 +164,7 @@ public class Main implements Runnable {
 		rootLogger.addHandler(handler);
 		rootLogger.setLevel(Level.parse(logLevelStr));
 		logger = Logger.getLogger("bndtools.launcher");
-		
+
 		return handler;
 	}
 
@@ -178,7 +178,7 @@ public class Main implements Runnable {
 			storagePath = new File(workingDir, storagePathStr);
 		}
 		logger.log(Level.FINE, "Using storage dir: {0}.", storagePath.getAbsolutePath());
-		
+
 		// Clean it if requested
 		boolean clean = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_STORAGE_CLEAN));
 		if(clean) {
@@ -208,7 +208,7 @@ public class Main implements Runnable {
 			logger.severe("No FrameworkFactory service providers available.");
 			return null;
 		}
-	
+
 		Framework framework = fwkFactory.newFramework(config);
 		logger.info("Created framework");
 		try {
@@ -218,34 +218,34 @@ public class Main implements Runnable {
 			logger.log(Level.SEVERE, "Error starting framework.", e);
 			return null;
 		}
-		
+
 		return framework;
 	}
 
 	Thread createInstaller(Framework framework, Properties props) {
 		boolean dynamic = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_DYNAMIC_BUNDLES, LauncherConstants.DEFAULT_DYNAMIC_BUNDLES));
 		boolean killOnError = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_SHUTDOWN_ON_BUNDLE_ERROR, LauncherConstants.DEFAULT_SHUTDOWN_ON_BUNDLE_ERROR));
-		
+
 		// Start the framework and synchronize the bundles; either once or continuously
 		Thread installerThread = null;
 		BundleInstaller installer = new BundleInstaller(propsFile, framework.getBundleContext(), killOnError);
-		
+
 		if(dynamic) {
 			installerThread = new Thread(installer);
 			installerThread.start();
 		} else {
 			installer.synchronizeBundles();
 		}
-		
+
 		return installerThread;
 	}
-	
+
 	/**
 	 * This method creates and registers an {@link Executor} service, then
 	 * performs work received by that executor on the calling thread, continuing
 	 * until the system bundle is shutdown. This method <b>will not return</b>
 	 * until the framework is shutting down.
-	 * 
+	 *
 	 * @param framework
 	 *            The OSGi framework
 	 * @param threadName
@@ -255,7 +255,7 @@ public class Main implements Runnable {
 	public void createAndRunMainThreadExecutor(Framework framework, String threadName) {
 		// Create work queue
 		final BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<Runnable>(1);
-		
+
 		// Register executor as a service
 		Properties mainThreadExecutorProps = new Properties();
 		mainThreadExecutorProps.put("thread", threadName);
@@ -268,7 +268,7 @@ public class Main implements Runnable {
 			}
 		};
 		framework.getBundleContext().registerService(Executor.class.getName(), mainThreadExecutor, mainThreadExecutorProps);
-		
+
 		// Create a bundle listener that will pull us out of the queue polling loop
 		// when the system bundle starts to shutdown
 		final AtomicBoolean shutdown = new AtomicBoolean(false);
@@ -281,7 +281,7 @@ public class Main implements Runnable {
 				}
 			}
 		});
-		
+
 		// Enter a loop to poll on the work queue
 		while(!shutdown.get()) {
 			try {
@@ -302,7 +302,7 @@ public class Main implements Runnable {
 	void debug(String message) {
 		if(enableDebug) System.err.println(message);
 	}
-	
+
 	void printHelp() {
 		System.out.println("java -cp org.eclipse.osgi-3.5.2.jar:bndtools.launcher.jar bndtools.launcher.Main [--debug] [launch.properties]");
 	}

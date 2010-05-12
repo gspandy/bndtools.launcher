@@ -274,7 +274,7 @@ class BundleInstaller implements Runnable {
 				bundleFile = new File(location);
 			}
 
-			if(!bundleFile.isFile()) {
+			if(!bundleFile.isFile() || bundleFile.isDirectory()) {
 				// Bundle file has been deleted => uninstall it
 				try {
 					log.log(Level.FINE, "Uninstalling bundle {0}.", bundle.getLocation());
@@ -347,6 +347,8 @@ class BundleInstaller implements Runnable {
 			    }
 			} catch (BundleException e) {
 				errors.add(new BundleOperationException(bundle.getLocation(), "Error starting bundle.", e));
+			} catch (IllegalStateException e) {
+			    errors.add(new BundleOperationException(bundle.getLocation(), "Error starting bundle", e));
 			}
 		}
 	}

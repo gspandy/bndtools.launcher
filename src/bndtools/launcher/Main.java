@@ -29,6 +29,8 @@ import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 import java.util.logging.StreamHandler;
 
+import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleEvent;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.Constants;
@@ -105,12 +107,14 @@ public class Main implements Runnable {
 			// CREATE FRAMEWORK AND SYNC BUNDLES
 			Framework framework = createAndRunFramework(config);
 			if(framework == null) return;
+			BundleContext fwContext = framework.getBundleContext();
 
 			// CREATE INSTALLER
-			Thread installerThread = createInstaller(framework, props);
-
+			Thread installerThread = createInstaller(fwContext, props);
+			
 			// MAIN THREAD EXECUTOR
-			createAndRunMainThreadExecutor(framework, "main");
+			if(framework.getState() == Bundle.ACTIVE) // Check the framework hasn't already shutdown
+			    createAndRunMainThreadExecutor(fwContext, "main");
 
 			// SHUTDOWN
 			try {
@@ -222,13 +226,13 @@ public class Main implements Runnable {
 		return framework;
 	}
 
-	Thread createInstaller(Framework framework, Properties props) {
+	Thread createInstaller(BundleContext framework, Properties props) {
 		boolean dynamic = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_DYNAMIC_BUNDLES, LauncherConstants.DEFAULT_DYNAMIC_BUNDLES));
 		boolean killOnError = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_SHUTDOWN_ON_BUNDLE_ERROR, LauncherConstants.DEFAULT_SHUTDOWN_ON_BUNDLE_ERROR));
 
 		// Start the framework and synchronize the bundles; either once or continuously
 		Thread installerThread = null;
-		BundleInstaller installer = new BundleInstaller(propsFile, framework.getBundleContext(), killOnError);
+		BundleInstaller installer = new BundleInstaller(propsFile, framework, killOnError);
 
 		if(dynamic) {
 			installerThread = new Thread(installer);
@@ -252,7 +256,7 @@ public class Main implements Runnable {
 	 *            The name of the calling thread; this will be used to set the
 	 *            {@code thread} property of the Executor service.
 	 */
-	public void createAndRunMainThreadExecutor(Framework framework, String threadName) {
+	public void createAndRunMainThreadExecutor(BundleContext framework, String threadName) {
 		// Create work queue
 		final BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<Runnable>(1);
 
@@ -267,13 +271,13 @@ public class Main implements Runnable {
 				workQueue.add(command);
 			}
 		};
-		framework.getBundleContext().registerService(Executor.class.getName(), mainThreadExecutor, mainThreadExecutorProps);
+		framework.registerService(Executor.class.getName(), mainThreadExecutor, mainThreadExecutorProps);
 
 		// Create a bundle listener that will pull us out of the queue polling loop
 		// when the system bundle starts to shutdown
 		final AtomicBoolean shutdown = new AtomicBoolean(false);
 		final Thread mainThread = Thread.currentThread();
-		framework.getBundleContext().addBundleListener(new SynchronousBundleListener() {
+		framework.addBundleListener(new SynchronousBundleListener() {
 			public void bundleChanged(BundleEvent event) {
 				if(event.getBundle().getBundleId() == 0 && event.getType() == BundleEvent.STOPPING) {
 					shutdown.set(true);

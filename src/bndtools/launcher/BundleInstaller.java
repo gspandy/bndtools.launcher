@@ -45,17 +45,18 @@ class BundleInstaller implements Runnable {
 
 	private final File propsFile;
 	private final BundleContext framework;
-	private final boolean shutdownOnError;
+	private final Runnable errorCallback;
 
 	private final Map<String, Bundle> locationsMap = new HashMap<String, Bundle>();
 	private final Set<Long> startAttempted = new HashSet<Long>();
 	private long propsLastUpdated = 0L;
 
 
-	BundleInstaller(File propsFile, BundleContext framework, boolean shutdownOnError) {
+
+	BundleInstaller(File propsFile, BundleContext framework, Runnable errorCallback) {
 		this.propsFile = propsFile;
 		this.framework = framework;
-		this.shutdownOnError = shutdownOnError;
+        this.errorCallback = errorCallback;
 
 		init();
 	}
@@ -134,14 +135,8 @@ class BundleInstaller implements Runnable {
 				log.log(Level.SEVERE, message, error.getCause());
 			}
 
-			if(shutdownOnError) {
-				log.severe("SHUTTING DOWN due to errors.");
-				try {
-					framework.getBundle(0).stop();
-				} catch (BundleException e) {
-					log.log(Level.SEVERE, "Failed to shutdown OSGi Framework.", e);
-				}
-			}
+			if(errorCallback != null)
+			    errorCallback.run();
 		}
 	}
 

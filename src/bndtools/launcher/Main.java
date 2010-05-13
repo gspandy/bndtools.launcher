@@ -21,6 +21,7 @@ import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
@@ -45,19 +46,21 @@ public class Main implements Runnable {
 	private Logger logger;
 
 	public static void main(String[] args) {
+	    Main main = new Main();
 		try {
-			Main main = new Main();
 			main.init(args);
 			main.run();
 		} catch (Throwable t) {
 			t.printStackTrace();
 		} finally {
-			System.exit(0);
+		    int code = main.errorOccurred ? 1 : 0;
+			System.exit(code);
 		}
 	}
 
 	File propsFile;
 	boolean enableDebug = false;
+	volatile boolean errorOccurred = false;
 
 	public void init(String[] args) throws IllegalArgumentException {
 		String fileName = DEFAULT_PROPS_FILE;
@@ -226,13 +229,28 @@ public class Main implements Runnable {
 		return framework;
 	}
 
-	Thread createInstaller(BundleContext framework, Properties props) {
+	Thread createInstaller(final BundleContext framework, Properties props) {
 		boolean dynamic = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_DYNAMIC_BUNDLES, LauncherConstants.DEFAULT_DYNAMIC_BUNDLES));
 		boolean killOnError = "true".equalsIgnoreCase(props.getProperty(LauncherConstants.PROP_SHUTDOWN_ON_BUNDLE_ERROR, LauncherConstants.DEFAULT_SHUTDOWN_ON_BUNDLE_ERROR));
+		
+		Runnable errorCallback = null;
+		if(killOnError) {
+    		errorCallback = new Runnable() {
+                public void run() {
+                    logger.severe("SHUTTING DOWN due to errors.");
+                    errorOccurred = true;
+                    try {
+                        framework.getBundle(0).stop();
+                    } catch (BundleException e) {
+                        logger.log(Level.SEVERE, "Failed to shutdown OSGi Framework.", e);
+                    }
+                }
+            };
+		}
 
 		// Start the framework and synchronize the bundles; either once or continuously
 		Thread installerThread = null;
-		BundleInstaller installer = new BundleInstaller(propsFile, framework, killOnError);
+		BundleInstaller installer = new BundleInstaller(propsFile, framework, errorCallback);
 
 		if(dynamic) {
 			installerThread = new Thread(installer);
@@ -280,6 +298,7 @@ public class Main implements Runnable {
 		framework.addBundleListener(new SynchronousBundleListener() {
 			public void bundleChanged(BundleEvent event) {
 				if(event.getBundle().getBundleId() == 0 && event.getType() == BundleEvent.STOPPING) {
+				    logger.info("Signalling main thread to stop");
 					shutdown.set(true);
 					mainThread.interrupt();
 				}
@@ -287,10 +306,10 @@ public class Main implements Runnable {
 		});
 
 		// Enter a loop to poll on the work queue
-		while(!shutdown.get()) {
+		logger.fine("Main thread polling for work.");
+		while(!shutdown.get() && framework.getBundle().getState() == Bundle.ACTIVE) {
 			try {
-				logger.fine("Main thread polling for work.");
-				Runnable work = workQueue.take();
+				Runnable work = workQueue.poll(3, TimeUnit.SECONDS);
 				if(work != null) {
 					logger.fine("Main thread received a work task, executing.");
 					work.run();

@@ -22,9 +22,9 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,6 +40,10 @@ class BundleInstaller implements Runnable {
 
 	private static final int NO_START = -1;
     private static final int START = 0;
+
+    // The minimum time to wait before picking up a file that has changed. This
+    // hopefully avoids loading a file while it is still being written to disk.
+    private static final long MINIMUM_FILE_AGE = 2000;
 
 	private final Logger log = Logger.getLogger("bndtools.launcher");
 
@@ -92,16 +96,17 @@ class BundleInstaller implements Runnable {
 	}
 
 	void synchronizeBundles() {
-		long lastModified = propsFile.lastModified();
+		long propsFileLastModified = propsFile.lastModified();
+		long propsFileAge = System.currentTimeMillis() - propsFileLastModified;
 
 		Map<String, Integer> toInstall = new HashMap<String, Integer>();
 		List<Bundle> toRemove = new LinkedList<Bundle>();
 		int defaultStart = START;
 
 		// Reread bundle list if it has changed;
-		if(lastModified > propsLastUpdated) {
+		if(propsFileLastModified > propsLastUpdated  && propsFileAge >= MINIMUM_FILE_AGE) {
 		    log.fine("Launch properties file has changed");
-		    propsLastUpdated = lastModified;
+		    propsLastUpdated = propsFileLastModified;
 			defaultStart = loadBundles(toInstall);
 
 			// Find bundles to uninstall
@@ -269,7 +274,7 @@ class BundleInstaller implements Runnable {
 				bundleFile = new File(location);
 			}
 
-			if(!bundleFile.isFile() || bundleFile.isDirectory()) {
+			if(!bundleFile.isFile() && !bundleFile.isDirectory()) {
 				// Bundle file has been deleted => uninstall it
 				try {
 					log.log(Level.FINE, "Uninstalling bundle {0}.", bundle.getLocation());
@@ -279,7 +284,9 @@ class BundleInstaller implements Runnable {
 					errors.add(new BundleOperationException(bundle.getLocation(), "Error uninstalling bundle.", e));
 				}
 			} else {
-				if(bundle.getLastModified() < bundleFile.lastModified()) {
+				long fileLastModified = bundleFile.lastModified();
+				long fileAge = System.currentTimeMillis() - fileLastModified;
+                if(bundle.getLastModified() < fileLastModified && fileAge >= MINIMUM_FILE_AGE) {
 					try {
 						log.log(Level.FINE, "Updating bundle {0}.", bundle.getLocation());
 						startAttempted.remove(bundle.getBundleId());

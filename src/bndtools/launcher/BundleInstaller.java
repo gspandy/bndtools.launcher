@@ -55,8 +55,6 @@ class BundleInstaller implements Runnable {
 	private final Set<Long> startAttempted = new HashSet<Long>();
 	private long propsLastUpdated = 0L;
 
-
-
 	BundleInstaller(File propsFile, BundleContext framework, Runnable errorCallback) {
 		this.propsFile = propsFile;
 		this.framework = framework;
@@ -103,8 +101,12 @@ class BundleInstaller implements Runnable {
 		List<Bundle> toRemove = new LinkedList<Bundle>();
 		int defaultStart = START;
 
-		// Reread bundle list if it has changed;
-		if(propsFileLastModified > propsLastUpdated  && propsFileAge >= MINIMUM_FILE_AGE) {
+		boolean neverUpdated = propsLastUpdated == 0L;
+		boolean propsfileChanged = propsFileLastModified > propsLastUpdated;
+		
+		// (Re)read bundle list if (a) we have never read it before or (b) it has changed
+		// since we last read it
+		if(neverUpdated || (propsfileChanged && propsFileAge >= MINIMUM_FILE_AGE)) {
 		    log.fine("Launch properties file has changed");
 		    propsLastUpdated = propsFileLastModified;
 			defaultStart = loadBundles(toInstall);
@@ -286,7 +288,8 @@ class BundleInstaller implements Runnable {
 			} else {
 				long fileLastModified = bundleFile.lastModified();
 				long fileAge = System.currentTimeMillis() - fileLastModified;
-                if(bundle.getLastModified() < fileLastModified && fileAge >= MINIMUM_FILE_AGE) {
+                boolean bundleFileNewerThanBundle = bundle.getLastModified() < fileLastModified;
+				if(bundleFileNewerThanBundle && fileAge >= MINIMUM_FILE_AGE) {
 					try {
 						log.log(Level.FINE, "Updating bundle {0}.", bundle.getLocation());
 						startAttempted.remove(bundle.getBundleId());
